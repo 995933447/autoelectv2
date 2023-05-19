@@ -31,8 +31,8 @@ func NewDistribMuEtcdv3Cfg(cluster string, etcdCli *clientv3.Client, electInterv
 func NewAutoElection(driver ElectDriver, cfg any) (autoelectv2.AutoElection, error) {
 	switch driver {
 	case ElectDriverDistribMuEtcdv3:
-		specConf := cfg.(*DistribMuEtcdv3Cfg)
-		return etcdv3.New(specConf.cluster, specConf.etcdCli, specConf.electIntervalSec)
+		specCfg := cfg.(*DistribMuEtcdv3Cfg)
+		return etcdv3.New(specCfg.cluster, specCfg.etcdCli, specCfg.electIntervalSec)
 	}
 	return nil, fmt.Errorf("invalid driver:%d", driver)
 }
