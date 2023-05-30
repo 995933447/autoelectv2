@@ -12,12 +12,12 @@ var _ autoelectv2.AutoElection = (*AutoElection)(nil)
 
 func New(cluster string, etcdCli *clientv3.Client, masterReleaseSec uint32) (autoelectv2.AutoElection, error) {
 	elect := &AutoElection{
-		etcdCli:         etcdCli,
-		masterReleseSec: masterReleseSec,
-		stopSignCh:      make(chan struct{}),
+		etcdCli:          etcdCli,
+		masterReleaseSec: masterReleaseSec,
+		stopSignCh:       make(chan struct{}),
 	}
 
-	sess, err := concurrency.NewSession(etcdCli, concurrency.WithTTL(int(masterReleseSec)))
+	sess, err := concurrency.NewSession(etcdCli, concurrency.WithTTL(int(masterReleaseSec)))
 	if err != nil {
 		return nil, err
 	}
