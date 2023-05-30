@@ -28,12 +28,13 @@ func New(cluster string, etcdCli *clientv3.Client, electIntervalSec uint32) (aut
 }
 
 type AutoElection struct {
-	etcdCli          *clientv3.Client
-	etcdMuCli        *concurrency.Mutex
-	isMaster         bool
-	electIntervalSec uint32
-	masterExpireTime *time.Time
-	stopSignCh       chan struct{}
+	etcdCli               *clientv3.Client
+	etcdMuCli             *concurrency.Mutex
+	isMaster              bool
+	electIntervalSec      uint32
+	masterExpireTime      *time.Time
+	stopSignCh            chan struct{}
+	CheckConditionDoElect func() bool
 }
 
 func (a AutoElection) IsMaster() bool {
@@ -62,6 +63,11 @@ func (a AutoElection) LoopInElect(ctx context.Context, errCh chan error) {
 				continue
 			}
 
+			time.Sleep(time.Second)
+			continue
+		}
+
+		if a.CheckConditionDoElect != nil && !a.CheckConditionDoElect() {
 			time.Sleep(time.Second)
 			continue
 		}
