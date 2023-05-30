@@ -10,14 +10,14 @@ import (
 
 var _ autoelectv2.AutoElection = (*AutoElection)(nil)
 
-func New(cluster string, etcdCli *clientv3.Client, electIntervalSec uint32) (autoelectv2.AutoElection, error) {
+func New(cluster string, etcdCli *clientv3.Client, masterReleaseSec uint32) (autoelectv2.AutoElection, error) {
 	elect := &AutoElection{
-		etcdCli:          etcdCli,
-		electIntervalSec: electIntervalSec,
-		stopSignCh:       make(chan struct{}),
+		etcdCli:         etcdCli,
+		masterReleseSec: masterReleseSec,
+		stopSignCh:      make(chan struct{}),
 	}
 
-	sess, err := concurrency.NewSession(etcdCli, concurrency.WithTTL(int(electIntervalSec)))
+	sess, err := concurrency.NewSession(etcdCli, concurrency.WithTTL(int(masterReleseSec)))
 	if err != nil {
 		return nil, err
 	}
@@ -31,7 +31,7 @@ type AutoElection struct {
 	etcdCli               *clientv3.Client
 	etcdMuCli             *concurrency.Mutex
 	isMaster              bool
-	electIntervalSec      uint32
+	masterReleaseSec      uint32
 	masterExpireTime      *time.Time
 	stopSignCh            chan struct{}
 	CheckConditionDoElect func() bool
@@ -94,7 +94,7 @@ func (a *AutoElection) lostMaster() {
 
 func (a *AutoElection) becomeMaster() {
 	a.isMaster = true
-	*a.masterExpireTime = time.Now().Add(time.Second * time.Duration(a.electIntervalSec))
+	*a.masterExpireTime = time.Now().Add(time.Second * time.Duration(a.masterReleaseSec))
 }
 
 func (a AutoElection) StopElect() {
