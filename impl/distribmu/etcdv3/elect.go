@@ -37,6 +37,10 @@ type AutoElection struct {
 	CheckConditionDoElect func() bool
 }
 
+func (a AutoElection) SetCheckConditionDoElectFunc(fun func() bool) {
+	a.CheckConditionDoElect = fun
+}
+
 func (a AutoElection) IsMaster() bool {
 	return a.isMaster
 }
