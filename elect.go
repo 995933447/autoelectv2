@@ -9,4 +9,6 @@ type AutoElection interface {
 	LoopInElect(ctx context.Context, errCh chan error)
 	SetCheckConditionDoElectFunc(fun func() bool)
 	StopElect()
+	OnBeMaster(func())
+	OnLostMaster(func())
 }

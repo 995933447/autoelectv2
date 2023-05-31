@@ -35,6 +35,16 @@ type AutoElection struct {
 	masterExpireTime      *time.Time
 	stopSignCh            chan struct{}
 	CheckConditionDoElect func() bool
+	onBeMaster            func()
+	onLostMater           func()
+}
+
+func (a AutoElection) OnBeMaster(fun func()) {
+	a.onBeMaster = fun
+}
+
+func (a AutoElection) OnLostMaster(fun func()) {
+	a.onLostMater = fun
 }
 
 func (a AutoElection) SetCheckConditionDoElectFunc(fun func() bool) {
@@ -94,11 +104,17 @@ out:
 func (a *AutoElection) lostMaster() {
 	a.isMaster = false
 	a.masterExpireTime = nil
+	if a.onLostMater != nil {
+		a.onLostMater()
+	}
 }
 
 func (a *AutoElection) becomeMaster() {
 	a.isMaster = true
 	*a.masterExpireTime = time.Now().Add(time.Second * time.Duration(a.masterReleaseSec))
+	if a.onBeMaster != nil {
+		a.onBeMaster()
+	}
 }
 
 func (a AutoElection) StopElect() {
