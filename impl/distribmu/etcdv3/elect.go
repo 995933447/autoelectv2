@@ -70,8 +70,10 @@ func (a AutoElection) LoopInElect(ctx context.Context, errCh chan error) {
 				if err != nil {
 					if err != concurrency.ErrLocked {
 						errCh <- err
+						time.Sleep(time.Second)
+						continue
 					}
-					// 刷新失败，当失去了 master 地位
+					// 续期失败，当失去了 master 地位
 					a.lostMaster()
 				}
 				continue
