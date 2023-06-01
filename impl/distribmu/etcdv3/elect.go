@@ -111,7 +111,9 @@ func (a AutoElection) LoopInElect(ctx context.Context, errCh chan error) {
 		}
 
 		if !a.becomeMaster() {
-			time.Sleep(time.Second)
+			if err = a.etcdMuCli.Unlock(a.etcdCli.Ctx()); err != nil {
+				errCh <- err
+			}
 		}
 	}
 out:
