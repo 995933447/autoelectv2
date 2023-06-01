@@ -36,7 +36,6 @@ type AutoElection struct {
 	etcdConcurSess        *concurrency.Session
 	isMaster              bool
 	masterTenancySec      uint32
-	masterExpireTime      *time.Time
 	stopSignCh            chan struct{}
 	CheckConditionDoElect func() bool
 	onBeMaster            func()
@@ -82,6 +81,8 @@ func (a AutoElection) LoopInElect(ctx context.Context, errCh chan error) {
 				errCh <- err
 				if err = a.etcdMuCli.Unlock(a.etcdCli.Ctx()); err != nil {
 					errCh <- err
+					time.Sleep(time.Second)
+					continue
 				}
 				a.lostMaster()
 				continue
@@ -143,7 +144,6 @@ func (a *AutoElection) resetEtcdMu() error {
 
 func (a *AutoElection) lostMaster() {
 	a.isMaster = false
-	a.masterExpireTime = nil
 	if a.onLostMater != nil {
 		a.onLostMater()
 	}
@@ -151,7 +151,6 @@ func (a *AutoElection) lostMaster() {
 
 func (a *AutoElection) becomeMaster() {
 	a.isMaster = true
-	*a.masterExpireTime = time.Now().Add(time.Second * time.Duration(a.masterTenancySec))
 	if a.onBeMaster != nil {
 		a.onBeMaster()
 	}
