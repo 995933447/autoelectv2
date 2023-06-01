@@ -110,7 +110,9 @@ func (a AutoElection) LoopInElect(ctx context.Context, errCh chan error) {
 			}
 		}
 
-		a.becomeMaster()
+		if !a.becomeMaster() {
+			time.Sleep(time.Second)
+		}
 	}
 out:
 	return
@@ -137,13 +139,15 @@ func (a *AutoElection) lostMaster() {
 	}
 }
 
-func (a *AutoElection) becomeMaster() {
+func (a *AutoElection) becomeMaster() bool {
 	a.isMaster = true
 	if a.onBeMaster != nil {
 		if !a.onBeMaster() {
 			a.isMaster = false
+			return false
 		}
 	}
+	return true
 }
 
 func (a AutoElection) StopElect() {
