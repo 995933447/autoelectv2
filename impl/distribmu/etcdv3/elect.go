@@ -81,6 +81,9 @@ func (a AutoElection) LoopInElect(ctx context.Context, errCh chan error) {
 				errCh <- err
 				if err = a.etcdMuCli.Unlock(a.etcdCli.Ctx()); err != nil {
 					errCh <- err
+					a.lostMaster()
+					time.Sleep(time.Second)
+					continue
 				}
 				a.lostMaster()
 				continue
