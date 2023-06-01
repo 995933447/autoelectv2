@@ -30,28 +30,23 @@ func New(cluster string, etcdCli *clientv3.Client, masterTenancySec uint32) (aut
 }
 
 type AutoElection struct {
-	cluster               string
-	etcdCli               *clientv3.Client
-	etcdMuCli             *concurrency.Mutex
-	etcdConcurSess        *concurrency.Session
-	isMaster              bool
-	masterTenancySec      uint32
-	stopSignCh            chan struct{}
-	CheckConditionDoElect func() bool
-	onBeMaster            func()
-	onLostMater           func()
+	cluster          string
+	etcdCli          *clientv3.Client
+	etcdMuCli        *concurrency.Mutex
+	etcdConcurSess   *concurrency.Session
+	isMaster         bool
+	masterTenancySec uint32
+	stopSignCh       chan struct{}
+	onBeMaster       func() bool
+	onLostMater      func()
 }
 
-func (a AutoElection) OnBeMaster(fun func()) {
+func (a AutoElection) OnBeMaster(fun func() bool) {
 	a.onBeMaster = fun
 }
 
 func (a AutoElection) OnLostMaster(fun func()) {
 	a.onLostMater = fun
-}
-
-func (a AutoElection) SetCheckConditionDoElectFunc(fun func() bool) {
-	a.CheckConditionDoElect = fun
 }
 
 func (a AutoElection) IsMaster() bool {
@@ -96,11 +91,6 @@ func (a AutoElection) LoopInElect(ctx context.Context, errCh chan error) {
 				continue
 			}
 
-			time.Sleep(time.Second)
-			continue
-		}
-
-		if a.CheckConditionDoElect != nil && !a.CheckConditionDoElect() {
 			time.Sleep(time.Second)
 			continue
 		}
@@ -150,7 +140,9 @@ func (a *AutoElection) lostMaster() {
 func (a *AutoElection) becomeMaster() {
 	a.isMaster = true
 	if a.onBeMaster != nil {
-		a.onBeMaster()
+		if !a.onBeMaster() {
+			a.isMaster = false
+		}
 	}
 }
 
