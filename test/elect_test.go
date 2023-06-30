@@ -17,7 +17,7 @@ func TestLoopInEtcdv3Elect(t *testing.T) {
 	logger.SetLogLevel(log.LevelPanic)
 
 	etcdCli, err := clientv3.New(clientv3.Config{
-		Endpoints: []string{"127.0.0.1:2379"},
+		Endpoints: []string{"127.0.0.1:12379"},
 	})
 	if err != nil {
 		t.Log(err)
@@ -38,10 +38,10 @@ func TestLoopInEtcdv3Elect(t *testing.T) {
 		defer checkMasterTk.Stop()
 		for {
 			select {
-			case _ = <-stopTk.C:
-				fmt.Println("stop")
-				elect.StopElect()
-				fmt.Println("stopped")
+			//case _ = <-stopTk.C:
+			//	fmt.Println("stop")
+			//	elect.StopElect()
+			//	fmt.Println("stopped")
 			case _ = <-checkMasterTk.C:
 				fmt.Println(elect.IsMaster())
 			case err := <-errDuringLoopCh:

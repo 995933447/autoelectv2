@@ -41,19 +41,19 @@ type AutoElection struct {
 	onLostMater      func()
 }
 
-func (a AutoElection) OnBeMaster(fun func() bool) {
+func (a *AutoElection) OnBeMaster(fun func() bool) {
 	a.onBeMaster = fun
 }
 
-func (a AutoElection) OnLostMaster(fun func()) {
+func (a *AutoElection) OnLostMaster(fun func()) {
 	a.onLostMater = fun
 }
 
-func (a AutoElection) IsMaster() bool {
+func (a *AutoElection) IsMaster() bool {
 	return a.isMaster
 }
 
-func (a AutoElection) LoopInElect(ctx context.Context, errCh chan error) {
+func (a *AutoElection) LoopInElect(ctx context.Context, errCh chan error) {
 	for {
 		select {
 		case _ = <-a.stopSignCh:
