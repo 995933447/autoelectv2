@@ -16,14 +16,14 @@ const (
 
 type DistribMuEtcdv3Cfg struct {
 	etcdCli          *clientv3.Client
-	electIntervalSec uint32
+	masterTenancySec uint32
 	cluster          string
 }
 
-func NewDistribMuEtcdv3Cfg(cluster string, etcdCli *clientv3.Client, electIntervalSec uint32) *DistribMuEtcdv3Cfg {
+func NewDistribMuEtcdv3Cfg(cluster string, etcdCli *clientv3.Client, masterTenancySec uint32) *DistribMuEtcdv3Cfg {
 	return &DistribMuEtcdv3Cfg{
 		etcdCli:          etcdCli,
-		electIntervalSec: electIntervalSec,
+		masterTenancySec: masterTenancySec,
 		cluster:          cluster,
 	}
 }
@@ -32,7 +32,7 @@ func NewAutoElection(driver ElectDriver, cfg any) (autoelectv2.AutoElection, err
 	switch driver {
 	case ElectDriverDistribMuEtcdv3:
 		specCfg := cfg.(*DistribMuEtcdv3Cfg)
-		return etcdv3.New(specCfg.cluster, specCfg.etcdCli, specCfg.electIntervalSec)
+		return etcdv3.New(specCfg.cluster, specCfg.etcdCli, specCfg.masterTenancySec)
 	}
 	return nil, fmt.Errorf("invalid driver:%d", driver)
 }

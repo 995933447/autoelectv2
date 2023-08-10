@@ -3,34 +3,28 @@ package test
 import (
 	"context"
 	"fmt"
-	"github.com/995933447/autoelect/factory"
-	mufactory "github.com/995933447/distribmu/factory"
+	"github.com/995933447/autoelectv2/factory"
 	"github.com/995933447/log-go"
 	"github.com/995933447/log-go/impl/loggerwriter"
-	"github.com/995933447/redisgroup"
 	"github.com/995933447/std-go/print"
+	clientv3 "go.etcd.io/etcd/client/v3"
 	"testing"
 	"time"
 )
 
-func TestLoopInGitDistribElect(t *testing.T) {
+func TestLoopInEtcdv3Elect(t *testing.T) {
 	logger := log.NewLogger(loggerwriter.NewStdoutLoggerWriter(print.ColorBlue))
 	logger.SetLogLevel(log.LevelPanic)
-	elect, err := factory.NewAutoElection(
-		factory.ElectDriverGitDistribMu,
-		factory.NewDistribMuElectDriverConf(
-			"abc",
-			time.Second * 5,
-			mufactory.MuTypeRedis,
-			mufactory.NewRedisMuDriverConf(
-				redisgroup.NewGroup(
-					[]*redisgroup.Node{redisgroup.NewNode("127.0.0.1", 6379, "")},
-					logger,
-					),
-					100,
-				),
-			),
-		)
+
+	etcdCli, err := clientv3.New(clientv3.Config{
+		Endpoints: []string{"127.0.0.1:12379"},
+	})
+	if err != nil {
+		t.Log(err)
+		return
+	}
+
+	elect, err := factory.NewAutoElection(factory.ElectDriverDistribMuEtcdv3, factory.NewDistribMuEtcdv3Cfg("abc", etcdCli, 5))
 	if err != nil {
 		t.Log(err)
 		return
@@ -44,19 +38,17 @@ func TestLoopInGitDistribElect(t *testing.T) {
 		defer checkMasterTk.Stop()
 		for {
 			select {
-			case _ = <- stopTk.C:
-				fmt.Println("stop")
-				elect.StopElect()
-				fmt.Println("stopped")
-			case _ = <- checkMasterTk.C:
+			//case _ = <-stopTk.C:
+			//	fmt.Println("stop")
+			//	elect.StopElect()
+			//	fmt.Println("stopped")
+			case _ = <-checkMasterTk.C:
 				fmt.Println(elect.IsMaster())
-			case err := <- errDuringLoopCh:
+			case err := <-errDuringLoopCh:
 				t.Log(err)
 			}
 		}
 	}()
 
-	if err = elect.LoopInElect(context.Background(), errDuringLoopCh); err != nil {
-		t.Log(err)
-	}
+	elect.LoopInElect(context.Background(), errDuringLoopCh)
 }

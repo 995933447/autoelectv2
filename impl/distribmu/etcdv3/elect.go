@@ -10,37 +10,50 @@ import (
 
 var _ autoelectv2.AutoElection = (*AutoElection)(nil)
 
-func New(cluster string, etcdCli *clientv3.Client, electIntervalSec uint32) (autoelectv2.AutoElection, error) {
+func New(cluster string, etcdCli *clientv3.Client, masterTenancySec uint32) (autoelectv2.AutoElection, error) {
 	elect := &AutoElection{
+		cluster:          cluster,
 		etcdCli:          etcdCli,
-		electIntervalSec: electIntervalSec,
+		masterTenancySec: masterTenancySec,
 		stopSignCh:       make(chan struct{}),
 	}
 
-	sess, err := concurrency.NewSession(etcdCli, concurrency.WithTTL(int(electIntervalSec)))
+	var err error
+	elect.etcdConcurSess, err = concurrency.NewSession(etcdCli, concurrency.WithTTL(int(masterTenancySec)))
 	if err != nil {
 		return nil, err
 	}
 
-	elect.etcdMuCli = concurrency.NewMutex(sess, cluster)
+	elect.etcdMuCli = concurrency.NewMutex(elect.etcdConcurSess, cluster)
 
 	return elect, nil
 }
 
 type AutoElection struct {
+	cluster          string
 	etcdCli          *clientv3.Client
 	etcdMuCli        *concurrency.Mutex
+	etcdConcurSess   *concurrency.Session
 	isMaster         bool
-	electIntervalSec uint32
-	masterExpireTime *time.Time
+	masterTenancySec uint32
 	stopSignCh       chan struct{}
+	onBeMaster       func() bool
+	onLostMater      func()
 }
 
-func (a AutoElection) IsMaster() bool {
+func (a *AutoElection) OnBeMaster(fun func() bool) {
+	a.onBeMaster = fun
+}
+
+func (a *AutoElection) OnLostMaster(fun func()) {
+	a.onLostMater = fun
+}
+
+func (a *AutoElection) IsMaster() bool {
 	return a.isMaster
 }
 
-func (a AutoElection) LoopInElect(ctx context.Context, errCh chan error) {
+func (a *AutoElection) LoopInElect(ctx context.Context, errCh chan error) {
 	for {
 		select {
 		case _ = <-a.stopSignCh:
@@ -48,16 +61,32 @@ func (a AutoElection) LoopInElect(ctx context.Context, errCh chan error) {
 		default:
 		}
 
+		if a.etcdMuCli == nil {
+			if err := a.resetEtcdMu(); err != nil {
+				errCh <- err
+				time.Sleep(time.Second)
+				continue
+			}
+		}
+
 		if a.isMaster {
-			// 续期
-			if time.Now().Add(8 * time.Second).After(*a.masterExpireTime) {
-				err := a.etcdMuCli.TryLock(ctx)
-				if err != nil {
-					if err != concurrency.ErrLocked {
-						errCh <- err
-					}
-					// 刷新失败，当失去了 master 地位
-					a.lostMaster()
+			// make sure the session is not expired, and the owner key still exists.
+			resp, err := a.etcdCli.Get(ctx, a.etcdMuCli.Key())
+			if err != nil {
+				errCh <- err
+				if err = a.etcdMuCli.Unlock(a.etcdCli.Ctx()); err != nil {
+					errCh <- err
+				}
+				a.lostMaster()
+				continue
+			}
+
+			if len(resp.Kvs) == 0 {
+				a.lostMaster()
+				if err = a.resetEtcdMu(); err != nil {
+					errCh <- err
+					time.Sleep(time.Second)
+					continue
 				}
 				continue
 			}
@@ -71,24 +100,56 @@ func (a AutoElection) LoopInElect(ctx context.Context, errCh chan error) {
 			if err != concurrency.ErrSessionExpired {
 				errCh <- err
 				time.Sleep(time.Second)
+				continue
 			}
-			continue
+
+			if err = a.resetEtcdMu(); err != nil {
+				errCh <- err
+				time.Sleep(time.Second)
+				continue
+			}
 		}
 
-		a.becomeMaster()
+		if !a.becomeMaster() {
+			if err = a.etcdMuCli.Unlock(a.etcdCli.Ctx()); err != nil {
+				errCh <- err
+			}
+		}
 	}
 out:
 	return
 }
 
-func (a *AutoElection) lostMaster() {
-	a.isMaster = false
-	a.masterExpireTime = nil
+func (a *AutoElection) resetEtcdMu() error {
+	a.etcdMuCli = nil
+	a.etcdConcurSess = nil
+
+	var err error
+	a.etcdConcurSess, err = concurrency.NewSession(a.etcdCli, concurrency.WithTTL(int(a.masterTenancySec)))
+	if err != nil {
+		return err
+	}
+
+	a.etcdMuCli = concurrency.NewMutex(a.etcdConcurSess, a.cluster)
+	return nil
 }
 
-func (a *AutoElection) becomeMaster() {
+func (a *AutoElection) lostMaster() {
+	a.isMaster = false
+	if a.onLostMater != nil {
+		a.onLostMater()
+	}
+}
+
+func (a *AutoElection) becomeMaster() bool {
 	a.isMaster = true
-	*a.masterExpireTime = time.Now().Add(time.Second * time.Duration(a.electIntervalSec))
+	if a.onBeMaster != nil {
+		if !a.onBeMaster() {
+			a.isMaster = false
+			return false
+		}
+	}
+	return true
 }
 
 func (a AutoElection) StopElect() {
