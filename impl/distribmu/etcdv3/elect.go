@@ -3,9 +3,10 @@ package etcdv3
 import (
 	"context"
 	"github.com/995933447/autoelectv2"
-	"go.etcd.io/etcd/api/v3/v3rpc/rpctypes"
 	clientv3 "go.etcd.io/etcd/client/v3"
 	"go.etcd.io/etcd/client/v3/concurrency"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"time"
 )
 
@@ -98,7 +99,7 @@ func (a *AutoElection) LoopInElect(ctx context.Context, errCh chan error) {
 
 		err := a.etcdMuCli.Lock(ctx)
 		if err != nil {
-			if err != concurrency.ErrSessionExpired && err != rpctypes.ErrGRPCLeaseNotFound {
+			if err != concurrency.ErrSessionExpired && status.Code(err) != codes.NotFound {
 				errCh <- err
 				time.Sleep(time.Second)
 				continue
