@@ -2,7 +2,9 @@ package etcdv3
 
 import (
 	"context"
+	"errors"
 	"github.com/995933447/autoelectv2"
+	"github.com/995933447/runtimeutil"
 	clientv3 "go.etcd.io/etcd/client/v3"
 	"go.etcd.io/etcd/client/v3/concurrency"
 	"google.golang.org/grpc/codes"
@@ -41,22 +43,17 @@ type AutoElection struct {
 	stopSignCh       chan struct{}
 	onBeMaster       func() bool
 	onLostMater      func()
+	onErr            func(err error)
 }
 
 func (a *AutoElection) LoopInElectV2(ctx context.Context, onErr func(err error)) {
-	var errCh chan error
-	if onErr != nil {
-		errCh = make(chan error)
-		go func() {
-			for {
-				select {
-				case err := <-errCh:
-					onErr(err)
-				}
-			}
-		}()
+	a.Run(ctx, onErr)
+}
+
+func (a *AutoElection) OnErr(err error) {
+	if a.onErr != nil {
+		a.onErr(runtimeutil.NewStackErrWithSkip(2, err))
 	}
-	a.LoopInElect(ctx, errCh)
 }
 
 func (a *AutoElection) OnBeMaster(fun func() bool) {
@@ -72,6 +69,16 @@ func (a *AutoElection) IsMaster() bool {
 }
 
 func (a *AutoElection) LoopInElect(ctx context.Context, errCh chan error) {
+	a.Run(ctx, func(err error) {
+		if errCh != nil {
+			errCh <- err
+		}
+	})
+}
+
+func (a *AutoElection) Run(ctx context.Context, onErr func(err error)) {
+	a.onErr = onErr
+
 	for {
 		select {
 		case _ = <-a.stopSignCh:
@@ -81,7 +88,7 @@ func (a *AutoElection) LoopInElect(ctx context.Context, errCh chan error) {
 
 		if a.etcdMuCli == nil {
 			if err := a.resetEtcdMu(); err != nil {
-				errCh <- err
+				a.OnErr(err)
 				time.Sleep(time.Second)
 				continue
 			}
@@ -91,9 +98,9 @@ func (a *AutoElection) LoopInElect(ctx context.Context, errCh chan error) {
 			// make sure the session is not expired, and the owner key still exists.
 			resp, err := a.etcdCli.Get(ctx, a.etcdMuCli.Key())
 			if err != nil {
-				errCh <- err
+				a.OnErr(err)
 				if err = a.etcdMuCli.Unlock(a.etcdCli.Ctx()); err != nil {
-					errCh <- err
+					a.OnErr(err)
 				}
 				a.lostMaster()
 				continue
@@ -102,7 +109,7 @@ func (a *AutoElection) LoopInElect(ctx context.Context, errCh chan error) {
 			if len(resp.Kvs) == 0 {
 				a.lostMaster()
 				if err = a.resetEtcdMu(); err != nil {
-					errCh <- err
+					a.OnErr(err)
 					time.Sleep(time.Second)
 					continue
 				}
@@ -115,14 +122,14 @@ func (a *AutoElection) LoopInElect(ctx context.Context, errCh chan error) {
 
 		err := a.etcdMuCli.Lock(ctx)
 		if err != nil {
-			if err != concurrency.ErrSessionExpired && status.Code(err) != codes.NotFound {
-				errCh <- err
+			if !errors.Is(err, concurrency.ErrSessionExpired) && status.Code(err) != codes.NotFound {
+				a.OnErr(err)
 				time.Sleep(time.Second)
 				continue
 			}
 
 			if err = a.resetEtcdMu(); err != nil {
-				errCh <- err
+				a.OnErr(err)
 				time.Sleep(time.Second)
 				continue
 			}
@@ -130,7 +137,7 @@ func (a *AutoElection) LoopInElect(ctx context.Context, errCh chan error) {
 
 		if !a.becomeMaster() {
 			if err = a.etcdMuCli.Unlock(a.etcdCli.Ctx()); err != nil {
-				errCh <- err
+				a.OnErr(err)
 			}
 		}
 	}
