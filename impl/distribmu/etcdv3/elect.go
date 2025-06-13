@@ -43,6 +43,22 @@ type AutoElection struct {
 	onLostMater      func()
 }
 
+func (a *AutoElection) LoopInElectV2(ctx context.Context, onErr func(err error)) {
+	var errCh chan error
+	if onErr != nil {
+		errCh = make(chan error)
+		go func() {
+			for {
+				select {
+				case err := <-errCh:
+					onErr(err)
+				}
+			}
+		}()
+	}
+	a.LoopInElect(ctx, errCh)
+}
+
 func (a *AutoElection) OnBeMaster(fun func() bool) {
 	a.onBeMaster = fun
 }
