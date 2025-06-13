@@ -225,7 +225,7 @@ func (r *RedisElect) Run(onErr func(err error)) {
 
 func (r *RedisElect) OnErr(err error) {
 	if r.onErr != nil {
-		r.onErr(err)
+		r.onErr(runtimeutil.NewStackErrWithSkip(2, err))
 	}
 }
 
