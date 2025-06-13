@@ -40,7 +40,9 @@ func TestElect(t *testing.T) {
 		fmt.Println("err:", err)
 	}
 
-	e.LoopInElectV2(nil, nil)
+	e.LoopInElectV2(nil, func(err error) {
+		fmt.Println("loop err:", err)
+	})
 	time.Sleep(time.Second)
 	e2.LoopInElectV2(nil, nil)
 	e3.LoopInElectV2(nil, nil)
