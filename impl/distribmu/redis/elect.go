@@ -4,13 +4,19 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/995933447/autoelectv2"
-	"github.com/995933447/runtimeutil"
-	"github.com/gomodule/redigo/redis"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/995933447/autoelectv2"
+	"github.com/995933447/runtimeutil"
+	"github.com/gomodule/redigo/redis"
 )
+
+type RedisPool interface {
+	Get() redis.Conn
+	Close() error
+}
 
 type RedisElect struct {
 	name        string
@@ -18,7 +24,7 @@ type RedisElect struct {
 	nodeId      string
 	clusterKey  string
 	stopCh      chan struct{}
-	redisPool   *redis.Pool
+	redisPool   RedisPool
 	onBeMaster  func() bool
 	onLostMater func()
 	onErr       func(err error)
@@ -26,7 +32,7 @@ type RedisElect struct {
 
 var _ autoelectv2.AutoElection = (*RedisElect)(nil)
 
-func NewRedisElect(name, nodeId string, redisPool *redis.Pool) (*RedisElect, error) {
+func NewRedisElect(name, nodeId string, redisPool RedisPool) (*RedisElect, error) {
 	if name == "" {
 		return nil, errors.New("name is empty")
 	}
